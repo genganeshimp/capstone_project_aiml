@@ -178,17 +178,11 @@ final_model = Pipeline([
 final_model.fit(X_train, y_train)
 
 #6. Alert threshold. 
-# Take the final model's validation probabilities (predict_proba, positive class). 
-# Build the thresholds as exact decimals — use the literal list [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9] 
-# For each threshold t, predict "delayed" when the probability is ≥ t, 
-# and write outputs/part_c_thresholds.csv with columns threshold, TN, FP, FN, TP, accuracy, precision, recall, f1.
-#  Operations rule: because a missed delayed parcel costs more than an unnecessary call, 
-# the alert threshold is the highest t whose validation recall is at least 0.80 (if none reaches 0.80, use 0.1).
 
 y_val_proba = final_model.predict_proba(X_val)[:, 1]
 threshold_results = []
 for t in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
-    y_pred = (y_val_proba > t).astype(int)
+    y_pred = (y_val_proba >= t).astype(int)
     tn, fp, fn, tp = confusion_matrix(y_val, y_pred).ravel()
     accuracy = accuracy_score(y_val, y_pred)
     precision = precision_score(y_val, y_pred, zero_division=0)
@@ -198,3 +192,34 @@ for t in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
 
 threshold_df = pd.DataFrame(threshold_results).round(4)
 threshold_df.to_csv("outputs/part_c_thresholds.csv",index=False)
+
+threshold = threshold_df[threshold_df['recall'] >= 0.8]['threshold']
+alert_threshold = max(threshold) if not threshold.empty else 0.1
+
+
+#7. One test evaluation. 
+# Score the final model on the test rows at the chosen threshold, exactly once, 
+# and write outputs/part_c_final_test.csv (threshold, TN, FP, FN, TP, accuracy, precision, recall, f1). 
+# Write outputs/part_c_final_config.csv, one row, columns selector_k, n_estimators, max_depth, min_samples_leaf, threshold, 
+# chosen_from (max_depth is unlimited when there is no limit; chosen_from is the name of the winning candidate in part_c_tuning.csv).
+
+y_test_proba = final_model.predict_proba(X_test)[:, 1]
+y_test_pred = (y_test_proba >= alert_threshold).astype(int)
+tn, fp, fn, tp = confusion_matrix(y_test, y_test_pred).ravel()
+accuracy = accuracy_score(y_test, y_test_pred)
+precision = precision_score(y_test, y_test_pred, zero_division=0)
+recall = recall_score(y_test, y_test_pred, zero_division=0)
+f1 = f1_score(y_test, y_test_pred, zero_division=0)
+
+final_test_df = pd.DataFrame([{'threshold': alert_threshold, 'TN': tn, 'FP': fp, 'FN': fn, 'TP': tp, 
+                               'accuracy': accuracy, 'precision': precision, 'recall': recall, 'f1': f1}]).round(4)
+
+final_test_df.to_csv("outputs/part_c_final_test.csv",index=False)
+
+final_config_df = pd.DataFrame([{'selector_k': final_k,
+                                'n_estimators': best_params['n_estimators'],
+                                'max_depth': best_params['max_depth'] if best_params['max_depth'] is not None else 'unlimited',
+                                'min_samples_leaf': best_params['min_samples_leaf'],
+                                'threshold': alert_threshold,
+                                'chosen_from': max_model['search']}])
+final_config_df.to_csv("outputs/part_c_final_config.csv",index=False)
