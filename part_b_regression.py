@@ -8,13 +8,8 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, root_mean_squared_error
 from sklearn.pipeline import Pipeline
+from src.shipment_prep import FEATURES
 
-FEATURES = [
-    "promised_hours", "distance_km", "parcel_weight_kg", "log_declared_value", "n_stops",
-    "rain_flag", "sale_event_flag", "is_cod", "is_weekend", "dispatch_hour",
-    "hub_tier", "hub_daily_capacity",
-    "label_print_batch", "scanner_build_no", "tape_roll_no", "sticker_serial_mod", "shelf_slot_no",
-]
 reg_df = pd.read_csv('data/modelling_table.csv')
 
 reg_df = reg_df[FEATURES + ['delivery_hours']].copy()
@@ -51,7 +46,7 @@ baseline_rmse = root_mean_squared_error(y_val, y_val_pred_baseline)
 baseline_r2 = r2_score(y_val, y_val_pred_baseline)
 
 #4.
-dlst = [1, 2, 3, 4, 6, 8, 12]
+dlst = [1, 2, 3, 4, 6, 8, 12, None]
 score_list = []
 for d in dlst:
     model = DecisionTreeRegressor(max_depth=d, random_state=42)
@@ -60,18 +55,19 @@ for d in dlst:
     y_val_pred = model.predict(X_val)
     train_rmse = root_mean_squared_error(y_train, y_train_pred)
     val_rmse = root_mean_squared_error(y_val, y_val_pred)
-    score_list.append({'max_depth': d, 'train_rmse': train_rmse, 'val_rmse': val_rmse})
+    score_list.append({'max_depth': d if d is not None else 'unlimited', 'train_rmse': train_rmse, 'val_rmse': val_rmse})
 
 score_df = pd.DataFrame(score_list).round(4)
 score_df.to_csv('outputs/part_b_tree_depth.csv', index=False)
 best_depth = score_df.loc[score_df['val_rmse'].idxmin(), 'max_depth']
+best_depth = None if best_depth == 'unlimited' else int(best_depth)
 
 #5. Four candidate models
 candidate_lst=[]
-candidate_lst.append({'model': 'mean_baseline', 'split': 'val', 
-                       'MAE': baseline_mae, 
-                       'MSE': baseline_mse, 
-                       'RMSE': baseline_rmse, 
+candidate_lst.append({'model': 'mean_baseline', 'split': 'val',
+                       'MAE': baseline_mae,
+                       'MSE': baseline_mse,
+                       'RMSE': baseline_rmse,
                        'R2': baseline_r2})
 lr_pipe = Pipeline([('scaler', StandardScaler()),
                     ('model', LinearRegression())])
@@ -112,14 +108,12 @@ for lr in [0.01, 0.1, 1.0]:
 lr_df = pd.DataFrame(lr_lst).round(4)
 lr_df.to_csv('outputs/part_b_gb_learning_rate.csv', index=False)
 
-#  Learning-rate experiment. Fit GradientBoostingRegressor(n_estimators=100, learning_rate=lr, random_state=42) 
-# for lr in 0.01, 0.1, 1.0 and write outputs/part_b_gb_learning_rate.csv (learning_rate, val_rmse, val_r2).
 
 #Cross-validated comparison and final model.
 X_train_val = pd.concat([X_train, X_val], axis=0)
 y_train_val = pd.concat([y_train, y_val], axis=0)
 
-final_model_lst = candidate_df.sort_values(by='RMSE').iloc[0:2]['model'].tolist()
+final_model_lst = candidate_df[candidate_df['model'] != 'mean_baseline'].sort_values(by='RMSE').iloc[0:2]['model'].tolist()
 cv_lst = []
 kf = KFold(n_splits=5, shuffle=True, random_state=42)
 for model_nm, model in models_list:

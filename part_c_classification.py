@@ -10,15 +10,8 @@ from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, r
 from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
+from src.shipment_prep import FEATURES, NOISE_COLUMNS
 
-FEATURES = [
-    "promised_hours", "distance_km", "parcel_weight_kg", "log_declared_value", "n_stops",
-    "rain_flag", "sale_event_flag", "is_cod", "is_weekend", "dispatch_hour",
-    "hub_tier", "hub_daily_capacity",
-    "label_print_batch", "scanner_build_no", "tape_roll_no", "sticker_serial_mod", "shelf_slot_no",
-]
-
-NOISE_COLUMNS = ["label_print_batch", "scanner_build_no", "tape_roll_no", "sticker_serial_mod", "shelf_slot_no"]
 reg_df = pd.read_csv('data/modelling_table.csv')
 
 reg_df = reg_df[FEATURES + ['is_delayed']].copy()
@@ -45,7 +38,7 @@ for i in depth:
 
 max_value = max(dclf_dict.values())
 d = min([k for k, v in dclf_dict.items() if v == max_value])
-clf_models_dict = {'blind_all_on_time': 'baseline', 
+clf_models_dict = {'blind_all_on_time': 'baseline',
                    'logistic_regression': logistic_pipe,
                    'decision_tree_depth_'+str(d): DecisionTreeClassifier(criterion="gini", max_depth=d, random_state=42),
                    'random_forest_default': RandomForestClassifier(n_estimators=100, random_state=42)}
@@ -53,14 +46,14 @@ df_lst = []
 for model_name, model in clf_models_dict.items():
     if model != 'baseline':
         model.fit(X_train, y_train)
-        y_pred = model.predict(X_val)       
+        y_pred = model.predict(X_val)
     else:
         y_pred = np.zeros_like(y_val)
     tn, fp, fn, tp = confusion_matrix(y_val, y_pred).ravel()
     accuracy = accuracy_score(y_val, y_pred)
     precision = precision_score(y_val, y_pred, zero_division=0)
     recall = recall_score(y_val, y_pred, zero_division=0)
-    f1 = f1_score(y_val, y_pred, zero_division=0) 
+    f1 = f1_score(y_val, y_pred, zero_division=0)
     df_lst.append({'model': model_name, 'TN': tn, 'FP': fp, 'FN': fn, 'TP': tp, 'accuracy': accuracy, 'precision': precision, 'recall': recall, 'f1': f1})
 
 clf_df = pd.DataFrame(df_lst).round(4)
@@ -74,7 +67,7 @@ selector = SelectKBest(f_classif, k="all")
 selector.fit(X_train, y_train)
 
 feature_df = pd.DataFrame({"feature":FEATURES,"f_score":selector.scores_, "rf_importance":model.feature_importances_})
-feature_df['f_rank'] = feature_df['f_score'].rank(ascending=False, method='min')
+feature_df['f_rank'] = feature_df['f_score'].rank(ascending=False, method='min').astype(int)
 feature_df['is_noise'] = feature_df['feature'].isin(NOISE_COLUMNS)
 
 feature_df = feature_df[["feature", "f_score", "f_rank", "rf_importance", "is_noise"]].round(4)
@@ -98,7 +91,7 @@ selectk_df = pd.DataFrame(selectk_lst).round(4)
 selectk_df.to_csv("outputs/part_c_selectk.csv",index=False)
 final_k = 7
 
-#4. Tuning. 
+#4. Tuning.
 selector = SelectKBest(f_classif, k=final_k)
 X_train_selected = selector.fit_transform(X_train, y_train)
 X_val_selected = selector.transform(X_val)
@@ -124,7 +117,7 @@ for search_name, search in tune_dict.items():
         'best_params': search.best_params_,
         'best_cv_accuracy': search.best_score_,
         'val_f1': f1_score(y_val, search.predict(X_val_selected))})
-    
+
 
 default_forest_same_7_features = RandomForestClassifier(n_estimators=100,min_samples_leaf=1 ,random_state=42)
 default_forest_same_7_features.fit(X_train_selected, y_train)
@@ -177,7 +170,7 @@ final_model = Pipeline([
 
 final_model.fit(X_train, y_train)
 
-#6. Alert threshold. 
+#6. Alert threshold.
 
 y_val_proba = final_model.predict_proba(X_val)[:, 1]
 threshold_results = []
@@ -197,12 +190,7 @@ threshold = threshold_df[threshold_df['recall'] >= 0.8]['threshold']
 alert_threshold = max(threshold) if not threshold.empty else 0.1
 
 
-#7. One test evaluation. 
-# Score the final model on the test rows at the chosen threshold, exactly once, 
-# and write outputs/part_c_final_test.csv (threshold, TN, FP, FN, TP, accuracy, precision, recall, f1). 
-# Write outputs/part_c_final_config.csv, one row, columns selector_k, n_estimators, max_depth, min_samples_leaf, threshold, 
-# chosen_from (max_depth is unlimited when there is no limit; chosen_from is the name of the winning candidate in part_c_tuning.csv).
-
+#7. One test evaluation.
 y_test_proba = final_model.predict_proba(X_test)[:, 1]
 y_test_pred = (y_test_proba >= alert_threshold).astype(int)
 tn, fp, fn, tp = confusion_matrix(y_test, y_test_pred).ravel()
@@ -211,7 +199,7 @@ precision = precision_score(y_test, y_test_pred, zero_division=0)
 recall = recall_score(y_test, y_test_pred, zero_division=0)
 f1 = f1_score(y_test, y_test_pred, zero_division=0)
 
-final_test_df = pd.DataFrame([{'threshold': alert_threshold, 'TN': tn, 'FP': fp, 'FN': fn, 'TP': tp, 
+final_test_df = pd.DataFrame([{'threshold': alert_threshold, 'TN': tn, 'FP': fp, 'FN': fn, 'TP': tp,
                                'accuracy': accuracy, 'precision': precision, 'recall': recall, 'f1': f1}]).round(4)
 
 final_test_df.to_csv("outputs/part_c_final_test.csv",index=False)
