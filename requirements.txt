@@ -2,22 +2,3 @@ pandas==2.2.2
 numpy==2.2.6
 scikit-learn==1.7.2
 joblib==1.6.0
-
-
-<repo>/
-├── README.md
-├── requirements.txt
-├── generate_data.py                 # the provided script, committed verbatim
-├── data/
-│   ├── hubs.csv  raw_shipments.csv  new_shipments.csv     # generator output, committed
-│   └── modelling_table.csv                                # written by part_a_clean_eda.py
-├── src/
-│   └── shipment_prep.py             # shared constants + clean_shipments + build_features
-├── part_a_clean_eda.py
-├── part_b_regression.py
-├── part_c_classification.py
-├── part_d_segments.py
-├── package_model.py
-├── predict_delay.py
-├── models/                          # delay_model.pkl, delay_threshold.csv, feature_order.csv, impute_values.csv
-└── outputs/                         # every CSV named in this brief
